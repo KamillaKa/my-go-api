@@ -231,7 +231,7 @@ func returnAllArticles(w http.ResponseWriter, r *http.Request) {
 How to Run the Project
 ----------------------
 
-1.  Clone the repository: ```git clone https://github.com/KamillaKa/go.git```
+1.  Clone the repository: ```git clone https://github.com/KamillaKa/my-go-api.git```
     
 2.  Install dependencies using Go modules: `go mod tidy`
     

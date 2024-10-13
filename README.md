@@ -74,7 +74,7 @@ func returnSingleArticle(w http.ResponseWriter, r *http.Request) {
 Step 2: MongoDB Integration
 ---------------------------
 
-In this step, I integrated MongoDB to persist the articles. I replaced the in-memory storage with MongoDB and made use of the MongoDB Go Driver (`go.mongodb.org/mongo-driver/mongo`) to interact with the database.
+In this step, I integrated MongoDB to persist the articles. I replaced the in-memory storage with MongoDB and made use of the MongoDB Go Driver (`go.mongodb.org/mongo-driver/mongo`) to interact with the database. I tried to use the Cloud Database but it didn't allow me to create anything more for free.
 
 ### Connecting to MongoDB
 

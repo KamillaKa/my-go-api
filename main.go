@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -122,21 +123,93 @@ func createNewArticle(w http.ResponseWriter, r *http.Request) {
 }
 
 func returnSingleArticle(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	params := mux.Vars(r)                              // Get ID from the request URL
+	id, err := primitive.ObjectIDFromHex(params["id"]) // Convert to ObjectID
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode("Invalid ID format")
+		return
+	}
 
+	var article Article
 	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var article Article
-	err := collection.FindOne(ctx, bson.M{"_id": id}).Decode(&article)
+	// Find the article by its ObjectID
+	err = collection.FindOne(ctx, bson.M{"_id": id}).Decode(&article)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode("Article not found")
 		return
 	}
+
 	json.NewEncoder(w).Encode(article)
+}
+
+// DELETE an article by ID
+func deleteArticle(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	// Convert the ID from the URL string to ObjectID
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		log.Println("Invalid ObjectID:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Invalid ObjectID format"))
+		return
+	}
+
+	collection := client.Database("articles").Collection("go")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Try deleting the article by its ObjectID
+	result, err := collection.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		log.Println("Error deleting article:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error deleting article"))
+		return
+	}
+
+	// Check if the article was found and deleted
+	if result.DeletedCount == 0 {
+		log.Println("Article not found")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("Article not found"))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Article deleted successfully"))
+}
+
+func updateArticle(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode("Invalid ID format")
+		return
+	}
+
+	var article Article
+	_ = json.NewDecoder(r.Body).Decode(&article)
+
+	collection := client.Database("articles").Collection("go")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	update := bson.M{"$set": article}
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode("Error updating article")
+		return
+	}
+
+	json.NewEncoder(w).Encode("Article updated successfully")
 }
 
 func handleRequests() {
@@ -145,6 +218,8 @@ func handleRequests() {
 	router.HandleFunc("/articles", returnAllArticles).Methods("GET")
 	router.HandleFunc("/article", createNewArticle).Methods("POST")
 	router.HandleFunc("/article/{id}", returnSingleArticle).Methods("GET")
+	router.HandleFunc("/article/{id}", updateArticle).Methods("PUT")
+	router.HandleFunc("/article/{id}", deleteArticle).Methods("DELETE")
 	log.Fatal(http.ListenAndServe(":10000", router))
 }
 

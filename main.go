@@ -30,44 +30,6 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
 }
 
-// Function to initialize mock data
-func initializeMockData() {
-	collection := client.Database("articles").Collection("go")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Mock articles
-	mockArticles := []Article{
-		{Title: "The Rise of AI", Desc: "Exploring the advancements in Artificial Intelligence.", Content: "Artificial Intelligence (AI) has made significant strides in recent years, impacting industries and everyday life."},
-		{Title: "Understanding Blockchain Technology", Desc: "A deep dive into how blockchain works.", Content: "Blockchain technology underpins cryptocurrencies like Bitcoin and has potential applications across various sectors."},
-		{Title: "Climate Change: The Facts", Desc: "Discussing the realities of climate change and its impacts.", Content: "Climate change poses a significant threat to our planet, with rising temperatures and extreme weather events becoming more common."},
-		{Title: "Health Benefits of Meditation", Desc: "The positive effects of meditation on mental health.", Content: "Meditation has been shown to reduce stress, enhance concentration, and promote emotional health."},
-		{Title: "Top 10 Programming Languages in 2024", Desc: "A look at the most popular programming languages this year.", Content: "In 2024, languages like Python, JavaScript, and Go continue to dominate the programming landscape."},
-		{Title: "Traveling the World on a Budget", Desc: "Tips and tricks for affordable travel.", Content: "Traveling doesn't have to break the bank. Here are some tips to make the most of your adventures without overspending."},
-		{Title: "The Future of Electric Vehicles", Desc: "How electric vehicles are shaping the future of transportation.", Content: "Electric vehicles (EVs) are becoming more popular due to advancements in technology and growing environmental concerns."},
-		{Title: "Healthy Eating: Myths vs. Facts", Desc: "Debunking common misconceptions about healthy eating.", Content: "Many myths surround nutrition. It's essential to distinguish between fact and fiction to maintain a balanced diet."},
-		{Title: "The Impact of Social Media on Society", Desc: "Analyzing the effects of social media on communication and relationships.", Content: "Social media has transformed how we connect, but it also brings challenges related to mental health and privacy."},
-		{Title: "Learning a New Language: Tips for Success", Desc: "Effective strategies for mastering a new language.", Content: "Learning a new language can be daunting, but with the right techniques, anyone can achieve fluency."},
-	}
-
-	// Check if the collection is empty before inserting mock data
-	count, err := collection.CountDocuments(ctx, bson.M{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if count == 0 {
-		// Insert mock articles into the collection
-		_, err = collection.InsertMany(ctx, mockArticles)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("Mock data inserted successfully!")
-	} else {
-		fmt.Println("Mock data already exists, skipping insertion.")
-	}
-}
-
 // Filtering, Sorting, and Pagination for retrieving all articles
 func returnAllArticles(w http.ResponseWriter, r *http.Request) {
 	collection := client.Database("articles").Collection("go")
@@ -208,9 +170,6 @@ func main() {
 		log.Fatal(err)
 	}
 	defer client.Disconnect(ctx)
-
-	// Initialize mock data
-	initializeMockData()
 
 	// Start the server
 	handleRequests()

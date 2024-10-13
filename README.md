@@ -74,26 +74,33 @@ func returnSingleArticle(w http.ResponseWriter, r *http.Request) {
 Step 2: MongoDB Integration
 ---------------------------
 
-In this step, I integrated MongoDB to persist the articles. I replaced the in-memory storage with MongoDB and made use of the MongoDB Go Driver (`go.mongodb.org/mongo-driver/mongo`) to interact with the database. I tried to use the Cloud Database but it didn't allow me to create anything more for free.
+In this step, I integrated to use MongoDB Atlas, a cloud-based service, MongoDB Atlas allows you to easily scale your databases and access them from anywhere.
 
 ### Connecting to MongoDB
 
-I set up a MongoDB client that connects to the database and interacts with a collection named `articles`. Here’s a snippet for establishing a MongoDB connection:
+I set up a MongoDB Atlas client that connects to a cloud database and interacts with a collection named `articles`. You can update the connection string in the `.env` file to your MongoDB Atlas URI.
+
+Example MongoDB Atlas connection in `.env` file: `DB_URL=mongodb+srv://<username>:<password>@cluster0.mongodb.net/articles?retryWrites=true&w=majority`
+
+connection in main.go:
 
 ```go
-var client *mongo.Client  
+var client *mongo.Client
 
-func main() {  ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)  
-    defer cancel()  
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
 
-    client, err = mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))  
-    if err != nil {  
-        log.Fatal(err)  
-    }  
-    defer client.Disconnect(ctx)  
+    clientOptions := options.Client().ApplyURI(os.Getenv("DB_URL"))
+    client, err := mongo.Connect(ctx, clientOptions)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Disconnect(ctx)
 
-    handleRequests()  
-}  
+    // Start the server
+    handleRequests()
+}
 ``` 
 
 ### MongoDB CRUD Operations

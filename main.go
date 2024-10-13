@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -30,7 +32,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 // Function to initialize mock data
 func initializeMockData() {
-	collection := client.Database("mydatabase").Collection("articles")
+	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -68,7 +70,7 @@ func initializeMockData() {
 
 // Filtering, Sorting, and Pagination for retrieving all articles
 func returnAllArticles(w http.ResponseWriter, r *http.Request) {
-	collection := client.Database("mydatabase").Collection("articles")
+	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -143,7 +145,7 @@ func createNewArticle(w http.ResponseWriter, r *http.Request) {
 	var article Article
 	_ = json.NewDecoder(r.Body).Decode(&article)
 
-	collection := client.Database("mydatabase").Collection("articles")
+	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -161,7 +163,7 @@ func returnSingleArticle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	collection := client.Database("mydatabase").Collection("articles")
+	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -185,12 +187,23 @@ func handleRequests() {
 }
 
 func main() {
+	// Load environment variables from the .env file
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	// MongoDB connection setup
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var err error
-	client, err = mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	// Use DB_URL from .env
+	dbURI := os.Getenv("DB_URL")
+	if dbURI == "" {
+		log.Fatal("DB_URL not set in the environment")
+	}
+
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(dbURI))
 	if err != nil {
 		log.Fatal(err)
 	}

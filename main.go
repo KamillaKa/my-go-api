@@ -21,113 +21,103 @@ import (
 var client *mongo.Client
 
 type Article struct {
-	ID      string `json:"_id,omitempty" bson:"_id,omitempty"`
-	Title   string `json:"Title" bson:"title"`
-	Desc    string `json:"desc" bson:"desc"`
-	Content string `json:"content" bson:"content"`
+	ID      primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	Title   string             `json:"Title" bson:"title"`
+	Desc    string             `json:"desc" bson:"desc"`
+	Content string             `json:"content" bson:"content"`
 }
 
+// Homepage Handler
 func homePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Welcome to the HomePage!")
+	fmt.Fprintln(w, "Welcome to the HomePage!")
 }
 
-// Filtering, Sorting, and Pagination for retrieving all articles
+// Retrieve All Articles with Pagination, Filtering, and Sorting
 func returnAllArticles(w http.ResponseWriter, r *http.Request) {
 	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Extracting query parameters for filtering, sorting, and pagination
-	queryTitle := r.URL.Query().Get("title") // Filter by title
-	queryDesc := r.URL.Query().Get("desc")   // Filter by description
-	sortField := r.URL.Query().Get("sort")   // Sort by field (e.g., title, desc)
-	sortOrder := r.URL.Query().Get("order")  // Sort order: 1 for ascending, -1 for descending
-	pageStr := r.URL.Query().Get("page")     // Page number
-	limitStr := r.URL.Query().Get("limit")   // Limit of items per page
+	// Query parameters for filtering, sorting, and pagination
+	queryTitle := r.URL.Query().Get("title")
+	queryDesc := r.URL.Query().Get("desc")
+	sortField := r.URL.Query().Get("sort")
+	sortOrder := r.URL.Query().Get("order")
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
 
-	// Set defaults if pagination params are not provided
 	page, _ := strconv.Atoi(pageStr)
 	limit, _ := strconv.Atoi(limitStr)
 	if page <= 0 {
 		page = 1
 	}
 	if limit <= 0 {
-		limit = 10 // Default limit is 10
+		limit = 10
 	}
-	skip := (page - 1) * limit // Calculate the offset for pagination
+	skip := (page - 1) * limit
 
-	// Build MongoDB filter
 	filter := bson.M{}
 	if queryTitle != "" {
-		filter["title"] = bson.M{"$regex": queryTitle, "$options": "i"} // Case-insensitive filtering
+		filter["title"] = bson.M{"$regex": queryTitle, "$options": "i"}
 	}
 	if queryDesc != "" {
 		filter["desc"] = bson.M{"$regex": queryDesc, "$options": "i"}
 	}
 
-	// Sorting logic
-	sortOptions := options.Find()
+	sortOptions := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit))
 	if sortField != "" {
 		order, _ := strconv.Atoi(sortOrder)
 		if order != 1 && order != -1 {
-			order = 1 // Default to ascending
+			order = 1
 		}
 		sortOptions.SetSort(bson.D{{sortField, order}})
 	}
 
-	// Pagination logic
-	sortOptions.SetSkip(int64(skip))
-	sortOptions.SetLimit(int64(limit))
-
-	// Execute query with filtering, sorting, and pagination
-	var articles []Article
 	cursor, err := collection.Find(ctx, filter, sortOptions)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode("Error fetching articles")
+		http.Error(w, "Error fetching articles", http.StatusInternalServerError)
 		return
 	}
 	defer cursor.Close(ctx)
 
-	for cursor.Next(ctx) {
-		var article Article
-		cursor.Decode(&article)
-		articles = append(articles, article)
-	}
-	if err := cursor.Err(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode("Error iterating articles")
+	var articles []Article
+	if err := cursor.All(ctx, &articles); err != nil {
+		http.Error(w, "Error iterating articles", http.StatusInternalServerError)
 		return
 	}
 
-	// Send response with articles
 	json.NewEncoder(w).Encode(articles)
 }
 
+// Create a New Article
 func createNewArticle(w http.ResponseWriter, r *http.Request) {
 	var article Article
-	_ = json.NewDecoder(r.Body).Decode(&article)
+	if err := json.NewDecoder(r.Body).Decode(&article); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
 	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	article.ID = primitive.NewObjectID() // Generate a new ObjectID
 	_, err := collection.InsertOne(ctx, article)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode("Error creating article")
+		http.Error(w, "Error creating article", http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(article)
 }
 
+// Retrieve a Single Article by ID
 func returnSingleArticle(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)                              // Get ID from the request URL
-	id, err := primitive.ObjectIDFromHex(params["id"]) // Convert to ObjectID
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode("Invalid ID format")
+		http.Error(w, "Invalid ID format", http.StatusBadRequest)
 		return
 	}
 
@@ -136,66 +126,29 @@ func returnSingleArticle(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Find the article by its ObjectID
 	err = collection.FindOne(ctx, bson.M{"_id": id}).Decode(&article)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode("Article not found")
+		http.Error(w, "Article not found", http.StatusNotFound)
 		return
 	}
 
 	json.NewEncoder(w).Encode(article)
 }
 
-// DELETE an article by ID
-func deleteArticle(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-
-	// Convert the ID from the URL string to ObjectID
-	id, err := primitive.ObjectIDFromHex(params["id"])
-	if err != nil {
-		log.Println("Invalid ObjectID:", err)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Invalid ObjectID format"))
-		return
-	}
-
-	collection := client.Database("articles").Collection("go")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Try deleting the article by its ObjectID
-	result, err := collection.DeleteOne(ctx, bson.M{"_id": id})
-	if err != nil {
-		log.Println("Error deleting article:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Error deleting article"))
-		return
-	}
-
-	// Check if the article was found and deleted
-	if result.DeletedCount == 0 {
-		log.Println("Article not found")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Article not found"))
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Article deleted successfully"))
-}
-
+// Update an Article by ID
 func updateArticle(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode("Invalid ID format")
+		http.Error(w, "Invalid ID format", http.StatusBadRequest)
 		return
 	}
 
 	var article Article
-	_ = json.NewDecoder(r.Body).Decode(&article)
+	if err := json.NewDecoder(r.Body).Decode(&article); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
 	collection := client.Database("articles").Collection("go")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -204,14 +157,41 @@ func updateArticle(w http.ResponseWriter, r *http.Request) {
 	update := bson.M{"$set": article}
 	_, err = collection.UpdateOne(ctx, bson.M{"_id": id}, update)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode("Error updating article")
+		http.Error(w, "Error updating article", http.StatusInternalServerError)
 		return
 	}
 
 	json.NewEncoder(w).Encode("Article updated successfully")
 }
 
+// Delete an Article by ID
+func deleteArticle(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	collection := client.Database("articles").Collection("go")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result, err := collection.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		http.Error(w, "Error deleting article", http.StatusInternalServerError)
+		return
+	}
+	if result.DeletedCount == 0 {
+		http.Error(w, "Article not found", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode("Article deleted successfully")
+}
+
+// Handle HTTP Requests
 func handleRequests() {
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/", homePage)
@@ -224,7 +204,7 @@ func handleRequests() {
 }
 
 func main() {
-	// Load environment variables from the .env file
+	// Load environment variables
 	err := godotenv.Load(".env")
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -234,7 +214,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Use DB_URL from .env
 	dbURI := os.Getenv("DB_URL")
 	if dbURI == "" {
 		log.Fatal("DB_URL not set in the environment")
@@ -246,6 +225,5 @@ func main() {
 	}
 	defer client.Disconnect(ctx)
 
-	// Start the server
 	handleRequests()
 }
